@@ -1,0 +1,24 @@
+steps:
+- name: 'gcr.io/kaniko-project/executor:latest'
+  args:
+  - --destination=europe-west1-docker.pkg.dev/$PROJECT_ID/default/$_SERVICE_NAME
+  - --cache=true
+  - --cache-ttl=24h
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: gcloud
+  args: [
+    'run',
+    'deploy',
+    '$_SERVICE_NAME',
+    '--image',
+    'europe-west1-docker.pkg.dev/$PROJECT_ID/default/$_SERVICE_NAME',
+    '--region',
+    'europe-west1',
+    '--service-account',
+    'wiki-voyage-demo@$PROJECT_ID.iam.gserviceaccount.com',
+    '--allow-unauthenticated',
+    '--set-env-vars=MAPS_KEY=$_MAPS_KEY,PROJECT_ID=$PROJECT_ID'
+  ]
+timeout: 300s
+substitutions:
+  _SERVICE_NAME: wikivoyage-demo
