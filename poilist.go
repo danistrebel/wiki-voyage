@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 
 	"cloud.google.com/go/bigquery"
@@ -18,8 +19,44 @@ var (
 	poiCacheMu sync.RWMutex
 )
 
+func loadPointsOfInterest(city string) ([]PointOfInterest, error) {
+
+	projectId := os.Getenv("PROJECT_ID")
+	if projectId == "" {
+		log.Fatal("Missing PROJECT_ID")
+	}
+
+	ctx := context.Background()
+	client, err := bigquery.NewClient(ctx, projectId)
+	if err != nil {
+		return nil, err
+	}
+	query := fmt.Sprintf("SELECT * FROM `%s.wiki_voyage.points_of_interest` WHERE city = '%s'", projectId, city)
+
+	it, err := client.Query(query).Read(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var pois []PointOfInterest
+	for {
+		var poi PointOfInterest
+		err := it.Next(&poi)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		poi.Icon = activitityEmoji(poi.Activity)
+		poi.Description = limitStringLength(poi.Description, 100)
+		pois = append(pois, poi)
+	}
+	return pois, nil
+
+}
+
 func activitityEmoji(activity string) string {
-	switch activity {
+	switch strings.ToLower(strings.TrimSpace(activity)) {
 	case "see":
 		return "👀"
 	case "do":
@@ -44,42 +81,7 @@ func limitStringLength(s string, maxLength int) string {
 	return s[:maxLength] + ".."
 }
 
-func loadPointsOfInterest(city string) ([]PointOfInterest, error) {
-
-	projectId := os.Getenv("PROJECT_ID")
-	if projectId == "" {
-		log.Fatal("Missing PROJECT_ID")
-	}
-	ctx := context.Background()
-	client, err := bigquery.NewClient(ctx, projectId)
-	if err != nil {
-		return nil, err
-	}
-	query := fmt.Sprintf("SELECT * FROM `%s.wiki_voyage.points_of_interest` WHERE city = '%s'", projectId, city)
-	q := client.Query(query)
-	it, err := q.Read(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var pois []PointOfInterest
-	for {
-		var poi PointOfInterest
-		err := it.Next(&poi)
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		poi.Icon = activitityEmoji(poi.Activity)
-		poi.Description = limitStringLength(poi.Description, 100)
-		pois = append(pois, poi)
-	}
-	return pois, nil
-
-}
-
-const defaultCity = "Zurich"
+const defaultCity = "Istanbul"
 
 func listPointsOfInterestHandler(w http.ResponseWriter, r *http.Request) {
 	MapsApiKey := os.Getenv("MAPS_KEY")

@@ -53,12 +53,17 @@ func TestActivitityEmoji(t *testing.T) {
 		{
 			name:     "Activity with different case",
 			activity: "SEE",
-			want:     "📍",
+			want:     "👀",
 		},
 		{
 			name:     "Activity with spaces",
 			activity: " see ",
-			want:     "📍",
+			want:     "👀",
+		},
+		{
+			name:     "Activity with spaces and different case",
+			activity: "  EAT ",
+			want:     "🍽️",
 		},
 	}
 
