@@ -20,8 +20,8 @@ var (
 
 func loadPointsOfInterest(city string) ([]PointOfInterest, error) {
 	projectId := os.Getenv("PROJECT_ID")
-	if projectId == "" {
-		log.Fatal("Missing PROJECT_ID")
+if projectId == "" {
+		return nil, fmt.Errorf("missing PROJECT_ID environment variable")
 	}
 	ctx := context.Background()
 	client, err := bigquery.NewClient(ctx, projectId)
