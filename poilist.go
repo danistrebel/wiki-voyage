@@ -19,8 +19,8 @@ var (
 )
 
 func limitStringLength(s string, maxLength int) string {
-	if len(s) <= maxLength {
-		return s // No need to truncate if within the limit
+if maxLength <= 0 {
+		return "" // Or return the original string, depending on desired behavior
 	}
 	return s[:maxLength] + ".."
 }
