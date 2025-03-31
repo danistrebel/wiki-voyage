@@ -22,7 +22,9 @@ func loadPointsOfInterest(city string) ([]PointOfInterest, error) {
 	projectId := os.Getenv("PROJECT_ID")
 	ctx := context.Background()
 	client, err := bigquery.NewClient(ctx, projectId)
+client, err := bigquery.NewClient(ctx, projectId)
 	if err != nil {
+		log.Printf("Error creating BigQuery client: %v", err)
 		return nil, err
 	}
 	query := fmt.Sprintf("SELECT * FROM `%s.wiki_voyage.points_of_interest` WHERE city = '%s'", projectId, city)
