@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
 	"sync"
+
+	"cloud.google.com/go/bigquery"
+	"google.golang.org/api/iterator"
 )
 
 var (
@@ -14,26 +18,66 @@ var (
 	poiCacheMu sync.RWMutex
 )
 
-func loadPointsOfInterest(city string) ([]PointOfInterest, error) {
+// activityEmoji returns an emoji string for a given activity type.
+func activityEmoji(activity string) string {
+	switch activity {
+	case "see":
+		return "👀"
+	case "do":
+		return "🤸"
+	case "eat":
+		return "🍽️"
+	case "sleep":
+		return "😴"
+	case "buy":
+		return "🛍️"
+	case "drink":
+		return "🍹"
+	default:
+		return "✨" // Default emoji for other activities
+	}
+}
 
-	return []PointOfInterest{
-		{
-			Title:       "Google ZRH Europaallee",
-			Description: "The Google office in Zurich is an engineering hub for artificial intelligence, machine learning, and natural language processing. The office is also home to teams working on Google products such as Gemini, Maps, and YouTube.",
-			Latitude:    47.3789437,
-			Longitude:   8.5324559,
-			Activity:    "work",
-			Icon:        "🤓",
-		},
-		{
-			Title:       "Google ZRH Brandschenkestrasse",
-			Description: "Another Google office in Zurich.",
-			Latitude:    47.365464,
-			Longitude:   8.525309,
-			Activity:    "work",
-			Icon:        "🤓",
-		},
-	}, nil
+func loadPointsOfInterest(city string) ([]PointOfInterest, error) {
+	projectId := os.Getenv("PROJECT_ID")
+	if projectId == "" {
+		log.Fatal("Missing PROJECT_ID")
+	}
+
+	ctx := context.Background()
+
+	query := fmt.Sprintf("SELECT * FROM `%s.wiki_voyage.points_of_interest` WHERE city = '%s'", projectId, city)
+
+	client, err := bigquery.NewClient(ctx, projectId)
+	if err != nil {
+		return nil, fmt.Errorf("error creating BigQuery client: %w", err)
+	}
+	defer client.Close()
+
+	queryJob := client.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("error creating query job: %w", err)
+	}
+
+	var pointsOfInterest []PointOfInterest
+	it, err := queryJob.Read(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error reading query results: %w", err)
+	}
+	for {
+		var row PointOfInterest
+		err := it.Next(&row)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("error reading row: %w", err)
+		}
+		row.Icon = activityEmoji(row.Activity)
+		pointsOfInterest = append(pointsOfInterest, row)
+	}
+	return pointsOfInterest, nil
+
 }
 
 const defaultCity = "Zurich"
