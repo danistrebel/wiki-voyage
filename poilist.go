@@ -46,9 +46,8 @@ func limitStringLength(s string, maxLength int) string {
 	return string(runes[:maxLength]) + ".."
 }
 
-func loadPointsOfInterest(city string) ([]PointOfInterest, error) {
+func loadPointsOfInterest(ctx context.Context, city string) ([]PointOfInterest, error) {
 	projectId := os.Getenv("PROJECT_ID")
-	ctx := context.Background()
 	client, err := bigquery.NewClient(ctx, projectId)
 	if err != nil {
 		return nil, err
