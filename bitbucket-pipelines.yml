@@ -1,0 +1,57 @@
+# Make sure the following Repo Variables are set 
+# - GEMINI_API_KEY: AI Studio API Key
+# - BITBUCKET_PR_API_KEY: Bitbucket API Key with 	read:pullrequest:bitbucket permission
+image: us-docker.pkg.dev/gemini-code-dev/gemini-cli/sandbox:0.3.2
+
+clone:
+  depth: full
+
+pipelines:
+  pull-requests:
+    '**':
+      - step:
+          name: Run a Gemini Code Assist Code Review
+          script:
+            - echo "--- Starting Debug Info ---"
+            - echo "Current user $(whoami)"
+            - echo "Initial working directory $(pwd)"
+            - echo "BITBUCKET_CLONE_DIR is $BITBUCKET_CLONE_DIR"
+            - echo "Listing contents of clone directory:"
+            - ls -la $BITBUCKET_CLONE_DIR
+            - echo "--- End Debug Info ---"
+
+            - echo "Perform a Code Review with Gemini CLI"
+            - |
+              gemini -y <<EOF
+              You are an expert Software Developer performing a code review in a BitBucket repostory.
+
+              Repo is cloned in directory $BITBUCKET_CLONE_DIR
+              Pull Request Source Branch $BITBUCKET_BRANCH 
+              Pull Request Desitionation Branch $BITBUCKET_PR_DESTINATION_BRANCH
+
+              Perform in-depth code review on the proposed changes. 
+
+              Start with a disclaimer "**Disclaimer:** This review was automatically generated using Gemini CLI. Treat with caution. You can find out more about Gemini CLI at https://github.com/google-gemini/gemini-cli"
+
+              Start with a summary of all the proposed changes and make you order your code review comments by importance.
+
+              Write your review to a file called '/opt/atlassian/pipelines/agent/build/review.json':
+
+              {
+                "content": {
+                  "raw": "Review goes here in markdown format with escaped strings"
+                }
+              }
+              
+              EOF
+            - cat /opt/atlassian/pipelines/agent/build/review.json
+            - |
+              curl -X POST --user "strebel@google.com:${BITBUCKET_PR_API_KEY}" \
+                "https://api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/pullrequests/${BITBUCKET_PR_ID}/comments" \
+                -H "Content-Type: application/json" \
+                -d @/opt/atlassian/pipelines/agent/build/review.json
+  custom:
+    explain:
+      - step:
+          script:
+            - gemini -y -p "explain what this repo does"
