@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
 	"sync"
+
+	"cloud.google.com/go/bigquery"
+	"google.golang.org/api/iterator"
 )
 
 var (
@@ -15,28 +19,78 @@ var (
 )
 
 func loadPointsOfInterest(city string) ([]PointOfInterest, error) {
+	projectId := os.Getenv("PROJECT_ID")
+	if projectId == "" {
+		log.Fatal("Missing PROJECT_ID")
+	}
+	ctx := context.Background()
+	client, err := bigquery.NewClient(ctx, projectId)
+	query := fmt.Sprintf("SELECT * FROM `%s.wiki_voyage.points_of_interest` WHERE city = '%s'", projectId, city)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer client.Close()
 
-	return []PointOfInterest{
-		{
-			Title:       "Google ZRH Europaallee",
-			Description: "The Google office in Zurich is an engineering hub for artificial intelligence, machine learning, and natural language processing. The office is also home to teams working on Google products such as Gemini, Maps, and YouTube.",
-			Latitude:    47.3789437,
-			Longitude:   8.5324559,
-			Activity:    "work",
-			Icon:        "🤓",
-		},
-		{
-			Title:       "Google ZRH Brandschenkestrasse",
-			Description: "Another Google office in Zurich.",
-			Latitude:    47.365464,
-			Longitude:   8.525309,
-			Activity:    "work",
-			Icon:        "🤓",
-		},
-	}, nil
+	queryJob := client.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("error creating BigQuery query: %w", err)
+	}
+
+	var pointsOfInterest []PointOfInterest
+	it, err := queryJob.Read(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error reading BigQuery query result: %w", err)
+	}
+	for {
+		var row PointOfInterest
+		err := it.Next(&row)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("error iterating BigQuery result: %w", err)
+		}
+		row.Icon = activityEmoji(row.Activity)
+
+		row.Description = limitStringLength(row.Description, 100)
+
+		pointsOfInterest = append(pointsOfInterest, row)
+	}
+	return pointsOfInterest, nil
 }
 
-const defaultCity = "Zurich"
+// function to represent activity types as emojis
+func activityEmoji(activity string) string {
+	switch activity {
+	case "see":
+		return "👀"
+	case "do":
+		return "🤸"
+	case "eat":
+		return "🍽️"
+	case "sleep":
+		return "😴"
+	case "buy":
+		return "🛍️"
+	case "drink":
+		return "🍻"
+	default:
+		return ""
+	}
+}
+
+// Calculate the approximate distance between two places based on geo coordinates
+
+// limitStringLength truncates a string to a maximum length.
+func limitStringLength(s string, maxLength int) string {
+	if len(s) <= maxLength {
+		return s
+	}
+	// Truncate and add an ellipsis.
+	return s[:maxLength] + "..."
+}
+
+const defaultCity = "Munich"
 
 func listPointsOfInterestHandler(w http.ResponseWriter, r *http.Request) {
 	MapsApiKey := os.Getenv("MAPS_KEY")
@@ -65,6 +119,11 @@ func listPointsOfInterestHandler(w http.ResponseWriter, r *http.Request) {
 		poiCacheMu.Lock()
 		poiCache[city] = PointsOfInterest
 		poiCacheMu.Unlock()
+	}
+
+	// Truncate descriptions before rendering
+	for i := range PointsOfInterest {
+		PointsOfInterest[i].Description = limitStringLength(PointsOfInterest[i].Description, 100)
 	}
 
 	data := PageData{
